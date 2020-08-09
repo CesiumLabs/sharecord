@@ -1,4 +1,21 @@
-const CONSTANTS = {
+export interface ShardCordUserOptions {
+    username: string;
+    discrim: string;
+    createdAt: number;
+    socketID?: string;
+}
+
+export interface ShareCordAddress {
+    address: string;
+    port: number;
+    family?: string;
+}
+
+export interface ShareCordReceiverOptions {
+    password?: string;
+}
+
+export const CONSTANTS = {
     ERRORS: {
         NO_CONTENT: "204: No Content",
         ANONYMOUS_USER: "401: Anonymous User",
@@ -6,7 +23,7 @@ const CONSTANTS = {
     }
 }
 
-function parseID (id) {
+export function parseID(id: string): ShardCordUserOptions | false | null {
     try {
         const userString = Buffer.from(id, "base64").toString();
         const userJSON = JSON.parse(userString);
@@ -17,7 +34,7 @@ function parseID (id) {
     }
 }
 
-function validateUser(user) {
+export function validateUser(user: ShardCordUserOptions): boolean {
     if (
         !user ||
         typeof user !== "object" ||
@@ -32,10 +49,4 @@ function validateUser(user) {
         typeof user.createdAt !== "number"
     ) return false;
     return true;
-}
-
-module.exports = {
-    CONSTANTS,
-    parseID,
-    validateUser
 }
