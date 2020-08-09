@@ -3,6 +3,10 @@
   "version": "2.0.1",
   "description": "",
   "main": "build/index.js",
+  "scripts": {
+    "build": "tsc",
+    "docs": "npx typedoc --out ../sharecord-docs/docs ./src"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/zyrouge/sharecord.git"
@@ -23,5 +27,9 @@
     "http-terminator": "^2.0.3",
     "socket.io": "^2.3.0",
     "socket.io-client": "^2.3.0"
+  },
+  "devDependencies": {
+    "typedoc": "^0.18.0",
+    "typescript": "^3.9.7"
   }
 }
