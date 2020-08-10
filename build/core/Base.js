@@ -16,16 +16,17 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.ShareCordUser = void 0;
 var events_1 = require("events");
 var os_1 = __importDefault(require("os"));
 var ShareCordUser = /** @class */ (function (_super) {
     __extends(ShareCordUser, _super);
-    function ShareCordUser(info) {
+    function ShareCordUser(options) {
         var _this = _super.call(this) || this;
-        _this.username = info.username;
-        _this.discrim = info.discrim;
-        _this.createdAt = info.createdAt;
-        if (info.socketID)
+        _this.username = options.username;
+        _this.discrim = options.discrim;
+        _this.createdAt = options.createdAt;
+        if (options.socketID)
             _this.socketID = _this.socketID;
         return _this;
     }
@@ -42,7 +43,7 @@ var ShareCordUser = /** @class */ (function (_super) {
     });
     Object.defineProperty(ShareCordUser.prototype, "id", {
         get: function () {
-            return Buffer.from(JSON.stringify(this.user)).toString("base64");
+            return encodeURIComponent(Buffer.from(JSON.stringify(this.user)).toString("base64"));
         },
         enumerable: false,
         configurable: true
@@ -53,8 +54,10 @@ var ShareCordUser = /** @class */ (function (_super) {
         var networks = Object.values(connections);
         // @ts-ignore
         networks.forEach(function (net) { return ips.push.apply(ips, net); });
-        return ips.filter(function (net) { return net.family === "IPv4" && !net.internal; });
+        return ips
+            .filter(function (net) { return net.family === "IPv4" && !net.internal; })
+            .map(function (net) { return ({ address: net.address, family: net.family }); });
     };
     return ShareCordUser;
 }(events_1.EventEmitter));
-exports.default = ShareCordUser;
+exports.ShareCordUser = ShareCordUser;

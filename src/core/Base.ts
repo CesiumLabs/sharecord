@@ -1,26 +1,27 @@
 import {
-    ShardCordUserOptions
+    ShardCordUserOptions,
+    ShareCordNetworkAddress
 } from "./Utils";
 
 import { EventEmitter } from "events";
 import os from "os";
 
-export default class ShareCordUser extends EventEmitter {
-    username: string;
-    discrim: string;
-    createdAt: number;
-    socketID?: string;
+export class ShareCordUser extends EventEmitter {
+    public username: string;
+    public discrim: string;
+    public createdAt: number;
+    public socketID?: string;
 
-    constructor(info: ShardCordUserOptions) {
+    constructor(options: ShardCordUserOptions) {
         super();
 
-        this.username = info.username;
-        this.discrim = info.discrim;
-        this.createdAt = info.createdAt;
-        if (info.socketID) this.socketID = this.socketID;
+        this.username = options.username;
+        this.discrim = options.discrim;
+        this.createdAt = options.createdAt;
+        if (options.socketID) this.socketID = this.socketID;
     }
 
-    get user(): ShardCordUserOptions {
+    public get user(): ShardCordUserOptions {
         return {
             username: this.username,
             discrim: this.discrim,
@@ -28,16 +29,18 @@ export default class ShareCordUser extends EventEmitter {
         }
     }
 
-    get id (): string {
-        return Buffer.from(JSON.stringify(this.user)).toString("base64");
+    public get id (): string {
+        return encodeURIComponent(Buffer.from(JSON.stringify(this.user)).toString("base64"));
     }
 
-    getAvailableAddresses () {
+    public getAvailableAddresses(): Array<ShareCordNetworkAddress> {
         const ips: Array<os.NetworkInterfaceInfoIPv4> = [];
         const connections = os.networkInterfaces();
         const networks = Object.values(connections);
         // @ts-ignore
         networks.forEach(net => ips.push(...net));
-        return ips.filter(net => net.family === "IPv4" && !net.internal);
+        return ips
+            .filter(net => net.family === "IPv4" && !net.internal)
+            .map(net => ({ address: net.address, family: net.family }));
     }
 }

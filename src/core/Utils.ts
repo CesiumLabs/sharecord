@@ -11,11 +11,28 @@ export interface ShareCordAddress {
     family?: string;
 }
 
-export interface ShareCordReceiverOptions {
+export interface ShareCordNetworkAddress {
+    address: string;
+    family: string;
+}
+
+export interface ShareCordSenderServerOptions {
+    address: string;
+    port?: number;
+    password?: string;
+}
+
+export interface ShareCordReceiverServerOptions {
+    address: string;
+    port: number;
     password?: string;
 }
 
 export const CONSTANTS = {
+    SOCKET: {
+        FILES_GET: "GET Files",
+        FILES_POST: "POST Files"
+    },
     ERRORS: {
         NO_CONTENT: "204: No Content",
         ANONYMOUS_USER: "401: Anonymous User",
@@ -25,7 +42,8 @@ export const CONSTANTS = {
 
 export function parseID(id: string): ShardCordUserOptions | false | null {
     try {
-        const userString = Buffer.from(id, "base64").toString();
+        const decoded = decodeURIComponent(id);
+        const userString = Buffer.from(decoded, "base64").toString();
         const userJSON = JSON.parse(userString);
         const isValid = validateUser(userJSON);
         return isValid ? userJSON : false;

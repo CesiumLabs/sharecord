@@ -1,12 +1,12 @@
 import path from "path";
 import fs from "fs";
 
-export default class ShareCordFile {
-    path: string;
-    name: string;
-    ext: string;
-    size: number;
-    createdAt: number;
+export class ShareCordFile {
+    public path: string;
+    public name: string;
+    public ext: string;
+    public size: number;
+    public createdAt: number;
 
     constructor(fpath: string) {
         this.path = fpath;
@@ -18,7 +18,7 @@ export default class ShareCordFile {
         this.createdAt = lstat.birthtimeMs;
     }
 
-    get id (): string {
+    public get id (): string {
         return Buffer.from(`${this.name}:${this.size}:${this.createdAt}`).toString();
     }
 }

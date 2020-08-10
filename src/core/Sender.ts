@@ -1,8 +1,8 @@
-import ShareCordUser from "./Base";
-import ShareCordFile from "./File";
+import { ShareCordUser } from "./Base";
+import { ShareCordFile } from "./File";
 import {
     ShardCordUserOptions,
-    ShareCordReceiverOptions,
+    ShareCordSenderServerOptions,
     ShareCordAddress,
     CONSTANTS,
     parseID
@@ -13,35 +13,32 @@ import express from "express";
 import socketio from "socket.io";
 import httpTerminator from "http-terminator";
 
+export class ShareCordSender extends ShareCordUser {
+    public password?: string;
+    public filesMap: Map<string, ShareCordFile>;
+    public usersMap: Map<string, ShareCordUser>;
+    public server?: http.Server;
+    public app?: express.Express;
+    public socket?: socketio.Server;
+    public address?: ShareCordAddress;
+    public sender?: ShareCordUser;
 
-
-export default class ShareCordSender extends ShareCordUser {
-    password?: string;
-    private: boolean;
-    filesMap: Map<string, ShareCordFile>;
-    usersMap: Map<string, ShareCordUser>;
-    server?: http.Server;
-    app?: express.Express;
-    socket?: socketio.Server;
-    address?: ShareCordAddress;
-    sender?: ShareCordUser;
-
-    constructor(base: ShardCordUserOptions, { password }: ShareCordReceiverOptions) {
+    constructor(base: ShardCordUserOptions) {
         super(base);
 
-        if (password) this.password = password;
-        this.private = !!this.password;
         this.filesMap = new Map();
         this.usersMap = new Map();
     }
 
-    startServer(address: string): Promise<void> {
+    public startServer(options: ShareCordSenderServerOptions): Promise<void> {
         return new Promise((resolve, reject) => {
+            if(options.password) this.password = options.password;
+
             const app = express();
             const server = http.createServer(app);
             const socket = socketio(server);
 
-            socket.use((socketUser: ShareCordSenderSocketMiddleware, next) => {
+            socket.use((socketUser, next) => {
                 const id = socketUser.handshake.query.user ? decodeURIComponent(socketUser.handshake.query.user) : null;
                 if (!id) return next(new Error(CONSTANTS.ERRORS.ANONYMOUS_USER));
                 const userRaw = parseID(id);
@@ -50,22 +47,27 @@ export default class ShareCordSender extends ShareCordUser {
                 return next();
             });
 
-            socket.on("connection", (socketUser: ShareCordSenderSocketRequest) => {
+            socket.on("connection", (socketUser) => {
+                if (!socketUser.user) return socketUser.disconnect();
+    
                 this.usersMap.set(socketUser.user.id, socketUser.user);
-                this.emit("userConnect", socketUser.user);
+                this.emit("userConnect", socketUser.user, this);
+
+                socket.on(CONSTANTS.SOCKET.FILES_GET, () => {
+                    socket.emit(CONSTANTS.SOCKET.FILES_POST, this.files);
+                    this.emit("filesDispatch", socketUser.user, this);
+                });
 
                 socket.on("disconnect", () => {
-                    this.usersMap.delete(socketUser.user.id);
-                    this.emit("userDisconnect", socketUser.user);
+                    if (socketUser.user) {
+                        this.usersMap.delete(socketUser.user.id);
+                        this.emit("userDisconnect", socketUser.user, this);
+                    }
                 });
             });
 
-            socket.on("GET Files", () => {
-                socket.emit("POST Files", this.files);
-            });
-
             app.use((req, res, next) => {
-                const id = req.query.user && typeof req.query.user === "string" ? decodeURIComponent(req.query.user) : null;
+                const id = req.query.user && typeof req.query.user === "string" ? req.query.user : null;
                 if (!id) return res.end(CONSTANTS.ERRORS.ANONYMOUS_USER);
 
                 const user = parseID(id);
@@ -76,40 +78,46 @@ export default class ShareCordSender extends ShareCordUser {
             });
 
             app.get("/files/:id", (req, res) => {
+                if (!req.user) return res.end(CONSTANTS.ERRORS.ANONYMOUS_USER);
+
                 const id = req.params.id;
                 const file = this.filesMap.get(id) || null;
                 if (!file) return res.end(CONSTANTS.ERRORS.NO_CONTENT);
+                this.emit("fileDownload", req.user.user);
                 res.download(file.path);
             });
 
-            server.listen(undefined, address, () => {
+            server.listen(options.port, options.address, () => {
                 this.server = server;
                 this.app = app;
                 this.socket = socket;
                 const address = server.address();
                 // @ts-ignore
                 this.address = address && address.address && address.port ? { address: address.address, port: address.port } : null;
+                
+                this.emit("serverStarted", this);
                 resolve();
             });
         });
     }
 
-    addFile(file: ShareCordFile): void {
-        if (!file) throw new Error("Missing Parameter: file");
-        if (!(file instanceof ShareCordFile)) throw new Error("Invalid Parameter: file");
-
-        this.filesMap.set(file.id, file);
+    public addFile(filesRaw: ShareCordFile): void {
+        if (!filesRaw) throw new Error("Missing Parameter: file");
+        const files = Array.isArray(filesRaw) ? filesRaw : [filesRaw];
+        files.forEach(file => this.filesMap.set(file.id, file));
         if (this.socket) this.socket.emit("PATCH Files", this.files);
+        this.emit("filesAdded", files, this);
     }
 
-    removeFile(file: ShareCordFile): void {
-        if (!file) throw new Error("Missing Parameter: file");
-
-        this.filesMap.delete(file.id);
+    public removeFile(filesRaw: ShareCordFile | Array<ShareCordFile>): void {
+        if (!filesRaw) throw new Error("Missing Parameter: file");
+        const files = Array.isArray(filesRaw) ? filesRaw : [filesRaw];
+        files.forEach(file => this.filesMap.delete(file.id));
         if (this.socket) this.socket.emit("PATCH Files", this.files);
+        this.emit("filesRemoved", files, this);
     }
 
-    destroy(): Promise<void> {
+    public destroy(): Promise<void> {
         return new Promise(async (resolve, reject) => {
             delete this.app;
             if(this.socket) this.socket.close();
@@ -125,19 +133,15 @@ export default class ShareCordSender extends ShareCordUser {
         });
     }
 
-    get files(): Array<ShareCordFile> {
+    public get isPrivate(): boolean {
+        return !!this.password;
+    }
+
+    public get files(): Array<ShareCordFile> {
         return Object.values(this.filesMap);
     }
 
-    get users(): Array<ShareCordUser> {
+    public get users(): Array<ShareCordUser> {
         return Object.values(this.usersMap);
     }
-}
-
-interface ShareCordSenderSocketMiddleware extends socketio.Socket {
-    user?: ShareCordUser;
-}
-
-interface ShareCordSenderSocketRequest extends socketio.Socket {
-    user: ShareCordUser;
 }

@@ -1,26 +1,38 @@
-import ShareCordUser from "./Base";
+import { ShareCordUser } from "./Base";
+import { ShareCordFile } from "./File";
 import {
     ShardCordUserOptions,
+    ShareCordReceiverServerOptions,
     ShareCordAddress,
     CONSTANTS
 } from "./Utils";
 
 import socketIO from "socket.io-client";
 
-export default class ShareCordReceiver extends ShareCordUser {
-    socket?: SocketIOClient.Socket;
-    address?: ShareCordAddress;
+export class ShareCordReceiver extends ShareCordUser {
+    public socket?: SocketIOClient.Socket;
+    public address?: ShareCordAddress;
+    public files?: Array<ShareCordFile>;
 
     constructor(base: ShardCordUserOptions) {
         super(base);
     }
 
-    connectServer(address: string, port: number): Promise<void> {
+    public connectServer(options: ShareCordReceiverServerOptions): Promise<void> {
         return new Promise((resolve, reject) => {
-            const socket = socketIO(`http://${address}:${port}?user=${encodeURIComponent(this.id)}`);
+            const socket = socketIO(`http://${options.address}:${options.port}?user=${this.id}`);
             socket.on("connect", () => {
                 this.socket = socket;
-                this.address = { address, port };
+                this.address = { address: options.address, port: options.port };
+                this.files = [];
+
+                socket.emit(CONSTANTS.SOCKET.FILES_GET);
+                socket.on(CONSTANTS.SOCKET.FILES_POST, (files: Array<ShareCordFile>) => {
+                    this.files = files;
+                    this.emit("onFilesChange", this);
+                });
+
+                this.emit("socketConnect", this);
                 resolve();
             });
 
@@ -28,15 +40,23 @@ export default class ShareCordReceiver extends ShareCordUser {
                 if (
                     error === CONSTANTS.ERRORS.ANONYMOUS_USER ||
                     error === CONSTANTS.ERRORS.INVALID_USER
-                ) reject(`Couldn\'t Establish Connection to ${address}:${port}. Reason: ${error}`);
+                ) return reject(`Couldn\'t Establish Connection to ${options.address}:${options.port}. Reason: ${error}`);
+
+                this.emit("socketError", error, this);
             });
         });
     }
 
-    destroy(): Promise<void> {
+    public fetchFiles(): void {
+        this.socket?.emit(CONSTANTS.SOCKET.FILES_GET);
+    }
+
+    public destroy(): Promise<void> {
         return new Promise((resolve, reject) => {
             if(this.socket) this.socket.close();
             delete this.socket;
+
+            this.emit("socketDisconnect");
             resolve();
         });
     }

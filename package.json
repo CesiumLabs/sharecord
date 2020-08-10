@@ -1,11 +1,11 @@
 {
   "name": "sharecord-core",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "",
   "main": "build/index.js",
   "scripts": {
     "build": "tsc",
-    "docs": "npx typedoc --out ../sharecord-docs/docs ./src"
+    "docs": "npx typedoc --options ./typedoc.json"
   },
   "repository": {
     "type": "git",

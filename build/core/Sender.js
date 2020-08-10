@@ -63,8 +63,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-var Base_1 = __importDefault(require("./Base"));
-var File_1 = __importDefault(require("./File"));
+exports.ShareCordSender = void 0;
+var Base_1 = require("./Base");
 var Utils_1 = require("./Utils");
 var http_1 = __importDefault(require("http"));
 var express_1 = __importDefault(require("express"));
@@ -72,19 +72,17 @@ var socket_io_1 = __importDefault(require("socket.io"));
 var http_terminator_1 = __importDefault(require("http-terminator"));
 var ShareCordSender = /** @class */ (function (_super) {
     __extends(ShareCordSender, _super);
-    function ShareCordSender(base, _a) {
-        var password = _a.password;
+    function ShareCordSender(base) {
         var _this = _super.call(this, base) || this;
-        if (password)
-            _this.password = password;
-        _this.private = !!_this.password;
         _this.filesMap = new Map();
         _this.usersMap = new Map();
         return _this;
     }
-    ShareCordSender.prototype.startServer = function (address) {
+    ShareCordSender.prototype.startServer = function (options) {
         var _this = this;
         return new Promise(function (resolve, reject) {
+            if (options.password)
+                _this.password = options.password;
             var app = express_1.default();
             var server = http_1.default.createServer(app);
             var socket = socket_io_1.default(server);
@@ -95,63 +93,76 @@ var ShareCordSender = /** @class */ (function (_super) {
                 var userRaw = Utils_1.parseID(id);
                 if (!userRaw)
                     return next(new Error(Utils_1.CONSTANTS.ERRORS.INVALID_USER));
-                socketUser.user = new Base_1.default(__assign(__assign({}, userRaw), { socketID: socketUser.id }));
+                socketUser.user = new Base_1.ShareCordUser(__assign(__assign({}, userRaw), { socketID: socketUser.id }));
                 return next();
             });
             socket.on("connection", function (socketUser) {
+                if (!socketUser.user)
+                    return socketUser.disconnect();
                 _this.usersMap.set(socketUser.user.id, socketUser.user);
-                _this.emit("userConnect", socketUser.user);
+                _this.emit("userConnect", socketUser.user, _this);
+                socket.on(Utils_1.CONSTANTS.SOCKET.FILES_GET, function () {
+                    socket.emit(Utils_1.CONSTANTS.SOCKET.FILES_POST, _this.files);
+                    _this.emit("filesDispatch", socketUser.user, _this);
+                });
                 socket.on("disconnect", function () {
-                    _this.usersMap.delete(socketUser.user.id);
-                    _this.emit("userDisconnect", socketUser.user);
+                    if (socketUser.user) {
+                        _this.usersMap.delete(socketUser.user.id);
+                        _this.emit("userDisconnect", socketUser.user, _this);
+                    }
                 });
             });
-            socket.on("GET Files", function () {
-                socket.emit("POST Files", _this.files);
-            });
             app.use(function (req, res, next) {
-                var id = req.query.user && typeof req.query.user === "string" ? decodeURIComponent(req.query.user) : null;
+                var id = req.query.user && typeof req.query.user === "string" ? req.query.user : null;
                 if (!id)
                     return res.end(Utils_1.CONSTANTS.ERRORS.ANONYMOUS_USER);
                 var user = Utils_1.parseID(id);
                 if (!user)
                     return res.end(Utils_1.CONSTANTS.ERRORS.INVALID_USER);
-                req.user = new Base_1.default(user);
+                req.user = new Base_1.ShareCordUser(user);
                 return next();
             });
             app.get("/files/:id", function (req, res) {
+                if (!req.user)
+                    return res.end(Utils_1.CONSTANTS.ERRORS.ANONYMOUS_USER);
                 var id = req.params.id;
                 var file = _this.filesMap.get(id) || null;
                 if (!file)
                     return res.end(Utils_1.CONSTANTS.ERRORS.NO_CONTENT);
+                _this.emit("fileDownload", req.user.user);
                 res.download(file.path);
             });
-            server.listen(undefined, address, function () {
+            server.listen(options.port, options.address, function () {
                 _this.server = server;
                 _this.app = app;
                 _this.socket = socket;
                 var address = server.address();
                 // @ts-ignore
                 _this.address = address && address.address && address.port ? { address: address.address, port: address.port } : null;
+                _this.emit("serverStarted", _this);
                 resolve();
             });
         });
     };
-    ShareCordSender.prototype.addFile = function (file) {
-        if (!file)
+    ShareCordSender.prototype.addFile = function (filesRaw) {
+        var _this = this;
+        if (!filesRaw)
             throw new Error("Missing Parameter: file");
-        if (!(file instanceof File_1.default))
-            throw new Error("Invalid Parameter: file");
-        this.filesMap.set(file.id, file);
+        var files = Array.isArray(filesRaw) ? filesRaw : [filesRaw];
+        files.forEach(function (file) { return _this.filesMap.set(file.id, file); });
         if (this.socket)
             this.socket.emit("PATCH Files", this.files);
+        this.emit("filesAdded", files, this);
     };
-    ShareCordSender.prototype.removeFile = function (file) {
-        if (!file)
+    ShareCordSender.prototype.removeFile = function (filesRaw) {
+        var _this = this;
+        if (!filesRaw)
             throw new Error("Missing Parameter: file");
-        this.filesMap.delete(file.id);
+        var files = Array.isArray(filesRaw) ? filesRaw : [filesRaw];
+        files.forEach(function (file) { return _this.filesMap.delete(file.id); });
         if (this.socket)
             this.socket.emit("PATCH Files", this.files);
+        this.emit("filesRemoved", files, this);
     };
     ShareCordSender.prototype.destroy = function () {
         var _this = this;
@@ -180,6 +191,13 @@ var ShareCordSender = /** @class */ (function (_super) {
             });
         }); });
     };
+    Object.defineProperty(ShareCordSender.prototype, "isPrivate", {
+        get: function () {
+            return !!this.password;
+        },
+        enumerable: false,
+        configurable: true
+    });
     Object.defineProperty(ShareCordSender.prototype, "files", {
         get: function () {
             return Object.values(this.filesMap);
@@ -195,5 +213,5 @@ var ShareCordSender = /** @class */ (function (_super) {
         configurable: true
     });
     return ShareCordSender;
-}(Base_1.default));
-exports.default = ShareCordSender;
+}(Base_1.ShareCordUser));
+exports.ShareCordSender = ShareCordSender;
