@@ -1,0 +1,35 @@
+{
+  "name": "sharecord-core",
+  "version": "2.1.0",
+  "description": "",
+  "main": "build/index.js",
+  "scripts": {
+    "build": "tsc",
+    "docs": "npx typedoc --options ./typedoc.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zyrouge/sharecord.git"
+  },
+  "author": "ZYROUGE",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/zyrouge/sharecord/issues"
+  },
+  "homepage": "https://github.com/zyrouge/sharecord#readme",
+  "dependencies": {
+    "@types/express": "^4.17.7",
+    "@types/http-terminator": "^2.0.1",
+    "@types/node": "^14.0.27",
+    "@types/socket.io": "^2.1.10",
+    "@types/socket.io-client": "^1.4.33",
+    "express": "^4.17.1",
+    "http-terminator": "^2.0.3",
+    "socket.io": "^2.3.0",
+    "socket.io-client": "^2.3.0"
+  },
+  "devDependencies": {
+    "typedoc": "^0.18.0",
+    "typescript": "^3.9.7"
+  }
+}

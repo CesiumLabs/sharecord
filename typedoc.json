@@ -1,0 +1,10 @@
+{
+    "name": "sharecord-core Documentation",
+    "inputFiles": [
+        "./src"
+    ],
+    "out": "../sharecord-docs/docs",
+    "readme": "./readme.md",
+    "tsconfig": "./tsconfig.json",
+    "includeVersion": true
+}
